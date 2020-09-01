@@ -10,15 +10,17 @@ import time
 
 torch.cuda.set_device(0)
 
+input_size = 128
+
 
 def readfile(path, label):
     image_dir = sorted(os.listdir(path))
-    x = np.zeros((len(image_dir), 128, 128, 3), dtype=np.uint8)
+    x = np.zeros((len(image_dir), input_size, input_size, 3), dtype=np.uint8)
     y = np.zeros((len(image_dir)), dtype=np.uint8)
 
     for i, file in enumerate(image_dir):
         img = cv2.imread(os.path.join(path, file))
-        x[i, :, :] = cv2.resize(img, (128, 128))
+        x[i, :, :] = cv2.resize(img, (input_size, input_size))        # 将读取的图片缩放至 (128,128) 大小
         if label:
             y[i] = int(file.split('_')[0])
     if label:
@@ -118,7 +120,7 @@ class Classifier(nn.Module):
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(512*4*4, 1024),
+            nn.Linear(512*4*4, 1024),       # 全连接层
             nn.ReLU(),
             nn.Linear(1024, 512),
             nn.ReLU(),
@@ -131,8 +133,56 @@ class Classifier(nn.Module):
         return self.fc(out)
 
 
+class AlexNet(nn.Module):
+    def __init__(self):
+        super(AlexNet, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.BatchNorm2d(192),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
+            nn.BatchNorm2d(384),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256*6*6, 4096),
+            nn.ReLU(inplace=True),
+
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(4096, 11)
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size()[0], -1)
+        x = self.classifier(x)
+        return x
+
+
 # Training
 model = Classifier().cuda()
+# model = AlexNet().cuda()
 loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 num_epoch = 30
@@ -148,10 +198,10 @@ for epoch in range(num_epoch):
     model.train()       # 训练模型时会在前面使用
     for i, data in enumerate(train_loader):
         optimizer.zero_grad()
-        train_pred = model(data[0].cuda())
-        batch_loss = loss(train_pred, data[1].cuda())
-        batch_loss.backward()
-        optimizer.step()
+        train_pred = model(data[0].cuda())      # 使用 model 得到预测的概率分布，实质上是去调用 model 中的 forward 函数
+        batch_loss = loss(train_pred, data[1].cuda())   # 计算 loss，(prediction 和 label 必须同时在 CPU 或是 GPU 上)
+        batch_loss.backward()       # 利用 back propagation 计算出每个参数的 gradient
+        optimizer.step()            # 以 optimizer 用 gradient 更新参数值
 
         train_acc += np.sum(np.argmax(train_pred.cpu().data.numpy(), axis=1) == data[1].numpy())
         train_loss += batch_loss.item()
@@ -178,16 +228,16 @@ for epoch in range(num_epoch):
 """
 得到性能较好的模型参数之后，使用train set 和 valid set 共同训练
 """
-model_best = Classifier().cuda()
-loss = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model_best.parameters(), lr=0.001)
-num_epoch = 30
-
-for epoch in range(num_epoch):
-    epoch_start_time = time.time()
-    train_acc = 0.0
-    train_loss = 0.0
-
-    model_best.train()
+# model_best = Classifier().cuda()
+# loss = nn.CrossEntropyLoss()
+# optimizer = torch.optim.Adam(model_best.parameters(), lr=0.001)
+# num_epoch = 30
+#
+# for epoch in range(num_epoch):
+#     epoch_start_time = time.time()
+#     train_acc = 0.0
+#     train_loss = 0.0
+#
+#     model_best.train()
 
 
