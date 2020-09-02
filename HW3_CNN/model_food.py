@@ -317,7 +317,7 @@ train_val_loader = DataLoader(train_val_set, batch_size=batch_size, shuffle=True
 model_best = NewClassifier().cuda()
 loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model_best.parameters(), lr=0.001)
-num_epoch = 50
+num_epoch = 80
 
 for epoch in range(num_epoch):
     epoch_start_time = time.time()
@@ -360,6 +360,6 @@ with torch.no_grad():
 
 with open("predict.csv", 'w') as f:
     f.write('Id,Category\n')
-    for i, y in  enumerate(prediction):
+    for i, y in enumerate(prediction):
         f.write('{},{}\n'.format(i, y))
 
